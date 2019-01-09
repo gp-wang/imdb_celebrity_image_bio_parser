@@ -8,7 +8,7 @@ import os
 from collections import namedtuple
 import azure_parse
 from threading import Thread
-
+from multiprocessing import Process
 ImdbRecord = namedtuple('ImdbRecord', ['id', 'name', 'rank'])
 
 imdb_results_in_famous_order = []
@@ -86,8 +86,8 @@ def parse_celebs(celeb_records, offset):
     time.sleep(sec_to_cool_down)
 
 
-# NUM_RECORDS_PER_THREAD = 10    
-# threads = [Thread(target=parse_celebs, args=(combined_records[x: x + NUM_RECORDS_PER_THREAD], x)) for x in range(0, len(combined_records), NUM_RECORDS_PER_THREAD) ]
+NUM_RECORDS_PER_ = 8
+threads = [Thread(target=parse_celebs, args=(combined_records[x: x + NUM_RECORDS_PER_THREAD], x)) for x in range(0, len(combined_records), NUM_RECORDS_PER_THREAD) ]
 
 # for t in threads:
 #     t.start()
@@ -97,7 +97,7 @@ def parse_celebs(celeb_records, offset):
 #     t.join()
 
 # use single thread    
-parse_celebs(combined_records[582:], 0)
+# parse_celebs(combined_records[581:], 0)
 
 
          
