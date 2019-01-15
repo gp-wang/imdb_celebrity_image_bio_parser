@@ -1,5 +1,6 @@
+import shutil
 import time
-
+from pdb import set_trace as bp
 # goal: find out out of the top 5k celeb (imdb rank), which are not included in our filtered ms1m dataset
 #
 # method: for entries(imdb_id) "results", which are not included by "links"
@@ -86,18 +87,56 @@ def parse_celebs(celeb_records, offset):
     time.sleep(sec_to_cool_down)
 
 
-# NUM_RECORDS_PER_THREAD = 10    
-# threads = [Thread(target=parse_celebs, args=(combined_records[x: x + NUM_RECORDS_PER_THREAD], x)) for x in range(0, len(combined_records), NUM_RECORDS_PER_THREAD) ]
-
-# for t in threads:
-#     t.start()
+# input_list  = combined_records[612:]
 
 
-# for t in threads:
-#     t.join()
+# -- missing list
+# rework_list 01092019
+# missing id after checking, needs rework
+missing_msid_int_id_set ={ 517, 581, 693, 368, 765, 702, 816, 733, 667, 840, 713, 789, 498, 369, 329, 691, 648, 820, 719, 795, 714, 740, 663, 53, 688, 722, 692, 794, 844, 367, 734, 641, 763, 739, 684, 642, 720, 638, 821, 839, 814}
+
+missing_msid_set = {"m.{:08d}".format(item) for item in missing_msid_int_id_set}
+
+
+
+combined_records = []
+with open("to_be_manually_added.txt", "r") as f:
+    for line in f.readlines():
+         tokens = line.split("\t")
+         combined_record = CombinedRecord(rank=tokens[0], ms1m_id=tokens[1], imdb_id=tokens[2], name=tokens[3].strip('"'))
+         combined_records.append(combined_record)
+
+missing_records = {record for record in combined_records if record.ms1m_id in missing_msid_set}
+input_list = list(missing_records)
+
+# bp()
+
+# --actual parsing
+
+
+ROOT_DIR = os.path.abspath("img")
+
+
+if os.path.isdir(ROOT_DIR):
+    shutil.rmtree(ROOT_DIR)
+
+    
+TPS = int(250 * 0.8)
+
+    
+# NUM_RECORDS_PER_THREAD = max(1, len(input_list) // TPS )
+NUM_RECORDS_PER_THREAD = 25
+threads = [Thread(target=parse_celebs, args=(input_list[x: x + NUM_RECORDS_PER_THREAD], x)) for x in range(0, len(input_list), NUM_RECORDS_PER_THREAD) ]
+
+for t in threads:
+    t.start()
+
+
+for t in threads:
+    t.join()
 
 # use single thread    
-parse_celebs(combined_records[582:], 0)
+# parse_celebs(combined_records[612:], 0)
 
 
          

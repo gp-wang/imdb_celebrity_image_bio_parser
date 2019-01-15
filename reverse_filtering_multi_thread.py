@@ -16,6 +16,9 @@ MAX_TRY = 5
 
 ImdbRecord = namedtuple('ImdbRecord', ['id', 'name', 'rank'])
 
+# Input files
+
+
 imdb_results_in_famous_order = []
 with open("results", "r") as f:
      content = f.readlines()

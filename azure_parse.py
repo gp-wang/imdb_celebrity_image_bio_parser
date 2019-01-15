@@ -11,11 +11,12 @@ import os
 import shutil
 
 NOF_RECORD_PER_THREADS = 10
+
 ROOT_DIR = os.path.abspath("img")
 
 
-if os.path.isdir(ROOT_DIR):
-    shutil.rmtree(ROOT_DIR)
+# if os.path.isdir(ROOT_DIR):
+#     shutil.rmtree(ROOT_DIR)
 
 
 def get_celeb_photo_by_name(msid, name):
@@ -45,7 +46,7 @@ def get_celeb_photo_by_name(msid, name):
 
                # "license": "public",
                "imageType": "photo",
-               "count": 120,
+               "count": 200,
                "safeSearch": "Strict",
                "mkt": "en-US",
                # FORM=OIIRPO
