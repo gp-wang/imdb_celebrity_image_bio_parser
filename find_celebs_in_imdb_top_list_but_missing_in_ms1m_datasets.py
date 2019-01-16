@@ -1,3 +1,7 @@
+# prereq: sshfs mount and add openface to pythonpath
+#         export PYTHONPATH=/mnt/sshfs/c4-openface:$PYTHONPATH
+#         note: openface might be python2.7, you need to explore its usability under python3
+
 # goal: find out out of the top 5k celeb (imdb rank), which are not included in our filtered ms1m dataset
 #
 # method: for entries(imdb_id) "results", which are not included by "links"
@@ -36,7 +40,7 @@ def get_imdb_celebs_in_famous_order(imdb_celeb_list_fpath):
     """
      params:
      imdb_celeb_list_fpath (str): file path
-     
+
      returns:
      [ImdbRecord]
      """
@@ -55,7 +59,6 @@ def get_imdb_celebs_in_famous_order(imdb_celeb_list_fpath):
                 ImdbRecord(id=imdb_id, name=imdb_name, rank=idx))
     return imdb_results_in_famous_order
 
-
 def get_missing_celebs(imdb_results_in_famous_order,
                        matched_pairs_imdb_to_ms1m_fpath):
     '''
@@ -67,7 +70,7 @@ def get_missing_celebs(imdb_results_in_famous_order,
      [ CombinedRecord]
      '''
     imdb_ids_from_matched_links = set()
-    #with open(IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH, "r") as f:
+    # with open(IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH, "r") as f:
     with open(matched_pairs_imdb_to_ms1m_fpath, "r") as f:
         for line in f.readlines():
             _imdb_id, msid = line.split()
@@ -88,7 +91,6 @@ def get_missing_celebs(imdb_results_in_famous_order,
 
     return missing_celeb_records
 
-
 def write_out_missing_celeb_list(missing_celeb_records, out_file_path):
     with open(out_file_path, "w") as f:
         # with open(OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH, "w") as f:
@@ -100,89 +102,95 @@ def write_out_missing_celeb_list(missing_celeb_records, out_file_path):
                 file=f)
 
 
-def get_flattened_img_url_list_for_downloading(missing_celeb_records):
-    """
+class CelebImageService:
+    def __init__(self, home_dir='.'):
+        self.home_dir = home_dir
+        self.input_dir = self.home_dir + os.path.sep + 'incoming'
+        self.output_dir = self.home_dir + os.path.sep + 'outgoing'
+        self.img_dl_queue = multiprocessing.JoinableQueue()
+        self.img_align_queue = multiprocessing.JoinableQueue()
+        self.dl_size = 0
+        self.resized_size = multiprocessing.Value('i', 0)
+    
+    def get_flattened_img_url_list_for_downloading(self, missing_celeb_records):
+        """
 
-     params:
-     missing_celeb_records ([CombinedRecord])
+         params:
+         missing_celeb_records ([CombinedRecord])
 
-     returns:
-     [str] : urls for img
-     
-     """
+         returns:
+         [str] : urls for img
 
-    list_of_celeb_image_record_list = azure_connector.ticketed_get_celeb_image_url_list(
-        missing_celeb_records)
+         """
 
-    # bp()
-    flattened_list_of_celeb_image_record_list = []
-    for sublist in list_of_celeb_image_record_list:
-        if sublist:
-            flattened_list_of_celeb_image_record_list += sublist
+        list_of_celeb_image_record_list = azure_connector.ticketed_get_celeb_image_url_list(
+            missing_celeb_records)
 
-    return flattened_list_of_celeb_image_record_list
+        # bp()
+        flattened_list_of_celeb_image_record_list = []
+        for sublist in list_of_celeb_image_record_list:
+            if sublist:
+                flattened_list_of_celeb_image_record_list += sublist
 
+        return flattened_list_of_celeb_image_record_list
 
-def recreate_dir_if_exist(dirpath):
-    if os.path.isdir(dirpath):
-        shutil.rmtree(dirpath)
+    def download_flattened_image_url_list(self, flattened_list_of_celeb_image_record_list, download_root_dir):
+        utils.recreate_dir_if_exist(download_root_dir)
 
-    os.makedirs(dirpath)
+        pool_32 = multiprocessing.Pool(processes=32)
+        pool_32.map(utils.download_one_image_record,
+                    flattened_list_of_celeb_image_record_list)
 
-
-def download_flattened_image_url_list(
-        flattened_list_of_celeb_image_record_list, download_root_dir):
-
-    recreate_dir_if_exist(download_root_dir)
-
-    pool_32 = multiprocessing.Pool(processes=32)
-    pool_32.map(utils.download_one_image_record,
-                flattened_list_of_celeb_image_record_list)
-    pool_32.close()
-    pool_32.join()
-
-
-# -----------
-if __name__ == "__main__":
-    time_curr = time.perf_counter()
-    imdb_results_in_famous_order = get_imdb_celebs_in_famous_order(
-        IN_IMDB_TOP_CELEB_LIST_FPATH)
-    print("done reading parser results")
-
-    missing_celeb_records = get_missing_celebs(
-        imdb_results_in_famous_order, IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH)
-
-    write_out_missing_celeb_list(
-        missing_celeb_records, OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH)
-
-    time_prev = time_curr
-    time_curr = time.perf_counter()
-    print("done! finding missing celebs in {} secs".format(time_curr - time_prev))
+        pool_32.close()
+        pool_32.join()
 
 
-    # --- calling azure image search API to get images urls --- (not downloading yet)
+    def align_and_resize_img_record(self, img_record):
+        pass
 
-    print("Start getting image urls ......")
 
-    time_curr = time.perf_counter()
+    def align_and_resize_img_records(self):
+        pass
 
-    flattened_list_of_celeb_image_record_list = get_flattened_img_url_list_for_downloading(
-        missing_celeb_records)
 
-    time_prev = time_curr
-    time_curr = time.perf_counter()
+    def start_processing(self):
+        time_curr = time.perf_counter()
+        imdb_results_in_famous_order = get_imdb_celebs_in_famous_order(
+            IN_IMDB_TOP_CELEB_LIST_FPATH)
+        print("done reading parser results")
 
-    print(
-        "done getting image url list within {}".format(time_curr - time_prev))
+        missing_celeb_records = get_missing_celebs(
+            imdb_results_in_famous_order, IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH)
 
-    # --- downloading actual images --
-    print("Start downloading images for missing celebs ......")
-    time_curr = time.perf_counter()
+        write_out_missing_celeb_list(
+            missing_celeb_records, OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH)
 
-    download_flattened_image_url_list(
-        flattened_list_of_celeb_image_record_list, utils.ROOT_DIR)
+        time_prev = time_curr
+        time_curr = time.perf_counter()
+        print("done! finding missing celebs in {} secs".format(time_curr - time_prev))
 
-    time_prev = time_curr
-    time_curr = time.perf_counter()
-    print(
-        "done downloading images list within {}".format(time_curr - time_prev))
+        # --- calling azure image search API to get images urls --- (not downloading yet)
+        print("Start getting image urls ......")
+
+        time_curr = time.perf_counter()
+
+        flattened_list_of_celeb_image_record_list = get_flattened_img_url_list_for_downloading(
+            missing_celeb_records)
+
+        time_prev = time_curr
+        time_curr = time.perf_counter()
+
+        print(
+            "done getting image url list within {}".format(time_curr - time_prev))
+
+        # --- downloading actual images --
+        print("Start downloading images for missing celebs ......")
+        time_curr = time.perf_counter()
+
+        download_flattened_image_url_list(
+            flattened_list_of_celeb_image_record_list, utils.ROOT_DIR)
+
+        time_prev = time_curr
+        time_curr = time.perf_counter()
+        print(
+            "done downloading images list within {}".format(time_curr - time_prev))

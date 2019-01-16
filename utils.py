@@ -3,7 +3,7 @@ from collections import namedtuple
 from PIL import Image
 from io import BytesIO
 import os
-
+import shutil
 
 import cl_request
 
@@ -66,3 +66,9 @@ def downloads_images(image_record_list):
     pass
     
 
+
+def recreate_dir_if_exist(dirpath):
+    if os.path.isdir(dirpath):
+        shutil.rmtree(dirpath)
+
+    os.makedirs(dirpath)
