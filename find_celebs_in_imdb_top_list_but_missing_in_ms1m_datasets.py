@@ -1,13 +1,14 @@
-import shutil
-import time
-from pdb import set_trace as bp
 # goal: find out out of the top 5k celeb (imdb rank), which are not included in our filtered ms1m dataset
 #
 # method: for entries(imdb_id) "results", which are not included by "links"
 
-import os
 
-from threading import Thread
+import math
+import shutil
+import time
+from pdb import set_trace as bp
+import os
+from threading import Thread, Lock
 import multiprocessing
 import time
 
@@ -72,26 +73,30 @@ print("done! finding missing celebs in {} secs".format(time_done_finding_celeb_l
 # --- calling azure image search API to get images urls --- (not downloading yet)
 print("Start getting image urls ......")
 
-TPS_LIMIT = 250
+AZURE_IMAGE_SEARCH_API_TPS_LIMIT = 250
+SAFE_TPS_LIMIT = math.floor(AZURE_IMAGE_SEARCH_API_TPS_LIMIT * 0.8)
 
-# NOF_THREADS = TPS_LIMIT - TPS_LIMIT * 0.2      # give a safe margin of 20%
 NOF_THREADS = 8
 
-pool_8 = multiprocessing.Pool(processes=8)
+# pool_8 = multiprocessing.Pool(processes=8)
 
 time_curr = time.perf_counter()
-list_of_celeb_image_record_list = pool_8.map(azure_connector.get_celeb_image_url_list, missing_celeb_records)
+# list_of_celeb_image_record_list = pool_8.map(azure_connector.get_celeb_image_url_list, missing_celeb_records)
 
+list_of_celeb_image_record_list = azure_connector.ticketed_get_celeb_image_url_list(missing_celeb_records)
+
+# bp()
 flattened_list_of_celeb_image_record_list = []
 for sublist in list_of_celeb_image_record_list:
-     flattened_list_of_celeb_image_record_list += sublist
+     if sublist:
+          flattened_list_of_celeb_image_record_list += sublist
 
 time_prev = time_curr
 time_curr = time.perf_counter()
 print("done getting image url list within {}".format(time_curr - time_prev))
 
-pool_8.close()
-pool_8.join()
+
+
 
 # --- downloading actual images --
 print("Start downloading images for missing celebs ......")
