@@ -15,9 +15,8 @@ import logging
 import os
 from threading import Thread, Lock
 import multiprocessing
-import time
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-
+import sys
 
 # local modules gw
 import cl_request
@@ -105,7 +104,7 @@ def write_out_missing_celeb_list(missing_celeb_records, out_file_path):
     with open(out_file_path, "w") as f:
         # with open(OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH, "w") as f:
         for idx, combined_record in enumerate(missing_celeb_records):
-            logging.info(
+            print(
                 '{}\t{}\t{}\t"{}"'.format(
                     combined_record.rank, combined_record.ms1m_id,
                     combined_record.imdb_id, combined_record.name),
@@ -177,7 +176,9 @@ class CelebImageService:
             tb = None
         finally:
             if tb:
-                print tb
+                print(tb, file=sys.stderr)
+                logging.error(tb)
+                
             
             
 
