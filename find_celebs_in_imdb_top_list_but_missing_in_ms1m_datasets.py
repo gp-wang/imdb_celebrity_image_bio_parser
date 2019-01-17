@@ -5,22 +5,31 @@
 # goal: find out out of the top 5k celeb (imdb rank), which are not included in our filtered ms1m dataset
 #
 # method: for entries(imdb_id) "results", which are not included by "links"
-
+from queue import Queue
 import math
 import shutil
 import time
 from pdb import set_trace as bp
-
+import logging
 import os
 from threading import Thread, Lock
 import multiprocessing
 import time
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+
 
 # local modules gw
 import cl_request
 import utils
 from utils import ImdbRecord, CombinedRecord
 import azure_connector
+
+
+
+
+FORMAT = "[%(threadName)s, %(asctime)s, %(levelname)s] %(message)s"
+logging.basicConfig(filename='logfile.log', level=logging.INFO, format=FORMAT)
+
 
 # constants
 TIMEOUT = 10
@@ -102,56 +111,75 @@ def write_out_missing_celeb_list(missing_celeb_records, out_file_path):
                 file=f)
 
 
+def get_flattened_img_url_list_for_downloading(self, missing_celeb_records):
+    """
+
+     params:
+     missing_celeb_records ([CombinedRecord])
+
+     returns:
+     [str] : urls for img
+
+     """
+
+    list_of_celeb_image_record_list = azure_connector.ticketed_get_celeb_image_url_list(
+        missing_celeb_records)
+
+    # bp()
+    flattened_list_of_celeb_image_record_list = []
+    for sublist in list_of_celeb_image_record_list:
+        if sublist:
+            flattened_list_of_celeb_image_record_list += sublist
+
+    return flattened_list_of_celeb_image_record_list
+
+
+
+
 class CelebImageService:
-    def __init__(self, home_dir='.'):
+    def __init__(self, home_dir='.', nof_image_download_worker = 32, nof_image_align_worker = 8):
         self.home_dir = home_dir
-        self.input_dir = self.home_dir + os.path.sep + 'incoming'
-        self.output_dir = self.home_dir + os.path.sep + 'outgoing'
+
+        
         self.img_dl_queue = multiprocessing.JoinableQueue()
         self.img_align_queue = multiprocessing.JoinableQueue()
-        self.dl_size = 0
-        self.resized_size = multiprocessing.Value('i', 0)
+
+        self.nof_image_download_worker = nof_image_download_worker
+        self.nof_image_align_worker = nof_image_align_worker
+
+    def download_images(self):
+        while not self.img_dl_queue.empty():
+            try:
+                image_record = self.img_dl_queue.get()
+                utils.download_one_image_record(image_record)
+                self.img_align_queue.put(image_record)
+                logging.debug('downloaded 1 image for {}, {} remaining'.format(image_record.name, self.img_dl_queue.qsize()))
+                self.img_dl_queue.task_done()
+            except Queue.empty:
+                logging.info('url Queue empty')
+        return
+
     
-    def get_flattened_img_url_list_for_downloading(self, missing_celeb_records):
-        """
-
-         params:
-         missing_celeb_records ([CombinedRecord])
-
-         returns:
-         [str] : urls for img
-
-         """
-
-        list_of_celeb_image_record_list = azure_connector.ticketed_get_celeb_image_url_list(
-            missing_celeb_records)
-
-        # bp()
-        flattened_list_of_celeb_image_record_list = []
-        for sublist in list_of_celeb_image_record_list:
-            if sublist:
-                flattened_list_of_celeb_image_record_list += sublist
-
-        return flattened_list_of_celeb_image_record_list
-
-    def download_flattened_image_url_list(self, flattened_list_of_celeb_image_record_list, download_root_dir):
-        utils.recreate_dir_if_exist(download_root_dir)
-
-        pool_32 = multiprocessing.Pool(processes=32)
-        pool_32.map(utils.download_one_image_record,
-                    flattened_list_of_celeb_image_record_list)
-
-        pool_32.close()
-        pool_32.join()
-
-
     def align_and_resize_img_record(self, img_record):
+        # TODO
         pass
 
 
-    def align_and_resize_img_records(self):
-        pass
+    def align_images(self):
+        while True:
+            image_record = self.img_align_queue.get()
+    
+            if image_record:
+                self.align_and_resize_img_record(image_record)
+                self.img_align_queue.task_done()
+                logging.info("alighed 1 mage for {}, {} remaining".format(image_record.name, self.img_align_queue.qsize()))
+            else:
+                self.img_align_queue.task_done()
+                break
+        return
 
+    
+        
 
     def start_processing(self):
         time_curr = time.perf_counter()
@@ -187,10 +215,37 @@ class CelebImageService:
         print("Start downloading images for missing celebs ......")
         time_curr = time.perf_counter()
 
-        download_flattened_image_url_list(
-            flattened_list_of_celeb_image_record_list, utils.ROOT_DIR)
+        for image_record in flattened_list_of_celeb_image_record_list:
+            self.img_dl_queue.put(image_record)
 
+        dl_worker_threads = [Thread(target=self.download_images) for _ in range(self.nof_image_download_worker)]
+
+        for t in dl_worker_threads:
+            t.start()
+
+        # start image-aligning workers
+        image_align_workers = [ multiprocessing.Process(target=self.align_images) for _ in range(self.nof_image_align_worker) ]
+
+        for p in image_align_workers:
+            p.start()
+
+            
+        
+        # wait for all download jobs are exhausted in Queue
+        self.img_dl_queue.join()
+
+        # then put poison pills 
+        for _ in range(self.nof_image_download_worker):
+            self.img_dl_queue.put(None)
+
+
+        # note: we still need manually join/stop image_align_workers even that poison pill will terminate them. Because we want main thread to wait here to declare entire process completion (end time counter)
+        for p in image_align_workers:
+            p.join()
+
+            
         time_prev = time_curr
         time_curr = time.perf_counter()
         print(
             "done downloading images list within {}".format(time_curr - time_prev))
+        

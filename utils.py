@@ -60,6 +60,7 @@ def download_one_image_record(image_record, is_proxied=False, timeout=None):
             print("success parse {} on trial #: {}".format(image_record, trial))
         finally:
             trial += 1
+            
 
     # TODO
 def downloads_images(image_record_list):
