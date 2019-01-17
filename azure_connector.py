@@ -1,4 +1,5 @@
 # import matplotlib.pyplot as plt
+import logging
 from pdb import set_trace as bp
 
 import requests
@@ -61,7 +62,7 @@ def query_azure_image_api_by_string(query_string, is_proxied=False):
             search_results = response.json()
             break
         except Exception:
-            print("failed on {} trial for getting query of {}".format(trial, query_string))
+            logging.warning("failed on {} trial for getting query of {}".format(trial, query_string))
             continue
         finally:
             trial += 1
@@ -147,7 +148,7 @@ def timer_do_work():
         
         elapsed_time = time.perf_counter() - time_zero
 
-        # print("-------------current time: {:6.3f}---------------".format(elapsed_time))
+        # logging.info("-------------current time: {:6.3f}---------------".format(elapsed_time))
 
         time.sleep(1)
 
@@ -175,15 +176,15 @@ def worker_do_work(work_item):
         ticketing_event.wait()
             
     # do actual work
-    # print("work item {} has started".format(work_item))
+    # logging.info("work item {} has started".format(work_item))
     # time.sleep(random.randint(0, 10))
-    # commet it out if it makes you harder to count started work item between timer printouts
-    # print("done with work item {}".format(work_item))
+    # commet it out if it makes you harder to count started work item between timer logging.infoouts
+    # logging.info("done with work item {}".format(work_item))
 
     assert type(work_item) is CombinedRecord, "work item is not celeb record"
     celeb_record = work_item
     results = get_celeb_image_url_list(celeb_record)
-    print("done work item {} and got {} image urls".format(celeb_record.name, len(results)))
+    logging.info("done work item {} and got {} image urls".format(celeb_record.name, len(results)))
     return results
     
 

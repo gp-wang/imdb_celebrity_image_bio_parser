@@ -1,3 +1,4 @@
+import logging
 import requests
 from collections import namedtuple
 from PIL import Image
@@ -30,7 +31,7 @@ def chunk_it(seq, num):
 
     return out
 
-def download_one_image_record(image_record, is_proxied=False, timeout=None):
+def download_one_image_record(image_record, is_proxied=False, timeout=None, dl_root_dir=ROOT_DIR):
     assert type(image_record) is ImageRecord, "not an ImageRecord"
     trial = 0
     while trial < 3:
@@ -42,7 +43,7 @@ def download_one_image_record(image_record, is_proxied=False, timeout=None):
 
             pil_image = Image.open(BytesIO(image_data.content))
 
-            dir_path = os.path.join(ROOT_DIR, image_record.ms1m_id)
+            dir_path = os.path.join(dl_root_dir, image_record.ms1m_id)
 
             if not os.path.isdir(dir_path):
                 os.makedirs(dir_path)
@@ -54,10 +55,10 @@ def download_one_image_record(image_record, is_proxied=False, timeout=None):
             break
             
         except Exception:
-            print("failed to parse {} on trial #: {}".format(image_record, trial))
+            logging.warning("failed to parse {} on trial #: {}".format(image_record, trial))
             continue
         else:
-            print("success parse {} on trial #: {}".format(image_record, trial))
+            logging.info("success parse {} on trial #: {}".format(image_record, trial))
         finally:
             trial += 1
             
