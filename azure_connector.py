@@ -85,10 +85,10 @@ def get_celeb_image_url_list(celeb_record):
     if not image_api_query_result_json:
         return []
     
-    if image_api_query_result_json["value"]:
-        object_list = image_api_query_result_json["value"] 
-    elif image_api_query_result_json["queryExpansions"]:
-        object_list = image_api_query_result_json["queryExpansions"] 
+    if "value" in  image_api_query_result_json:
+        object_list = image_api_query_result_json["value"] or []
+    elif "queryExpansions" in image_api_query_result_json:
+        object_list = image_api_query_result_json["queryExpansions"] or [] 
     else:
         object_list = []
 

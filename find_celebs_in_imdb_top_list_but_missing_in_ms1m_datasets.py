@@ -5,6 +5,7 @@
 # goal: find out out of the top 5k celeb (imdb rank), which are not included in our filtered ms1m dataset
 #
 # method: for entries(imdb_id) "results", which are not included by "links"
+import argparse
 import traceback
 from queue import Queue
 import math
@@ -196,24 +197,9 @@ class CelebImageService:
                 break
         return
 
-    
-        
 
-    def start_processing(self):
-        time_curr = time.perf_counter()
-        imdb_results_in_famous_order = get_imdb_celebs_in_famous_order(
-            IN_IMDB_TOP_CELEB_LIST_FPATH)
-        logging.info("done reading parser results")
 
-        missing_celeb_records = get_missing_celebs(
-            imdb_results_in_famous_order, IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH)
-
-        write_out_missing_celeb_list(
-            missing_celeb_records, OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH)
-
-        time_prev = time_curr
-        time_curr = time.perf_counter()
-        logging.info("done! finding missing celebs in {} secs".format(time_curr - time_prev))
+    def start_processing(self, celeb_records):
 
         # --- calling azure image search API to get images urls --- (not downloading yet)
         logging.info("Start getting image urls ......")
@@ -221,7 +207,7 @@ class CelebImageService:
         time_curr = time.perf_counter()
 
         flattened_list_of_celeb_image_record_list = get_flattened_img_url_list_for_downloading(
-            missing_celeb_records)
+            celeb_records)
 
         time_prev = time_curr
         time_curr = time.perf_counter()
@@ -266,10 +252,84 @@ class CelebImageService:
         time_curr = time.perf_counter()
         logging.info(
             "done downloading images list within {}".format(time_curr - time_prev))
+
+
+    def start_processing_with_imdbList_and_matchedPairsWithMs1m(self, imdb_list_fpath, matched_pairs_imdb_to_ms1m_fpath):
+        """
+        entry point: start the processing from imdbList and matchedPair file
+        """
+        time_curr = time.perf_counter()
+        imdb_results_in_famous_order = get_imdb_celebs_in_famous_order(
+            IN_IMDB_TOP_CELEB_LIST_FPATH)
+        logging.info("done reading parser results")
+
+        missing_celeb_records = get_missing_celebs(
+            imdb_results_in_famous_order, IN_MATCHED_PAIRS_OF_IMDB_TO_MS1M_FPATH)
+
+        write_out_missing_celeb_list(
+            missing_celeb_records, OUT_CELEB_LIST_MISSING_FROM_IMAGE_DATASET_FPATH)
+
+        time_prev = time_curr
+        time_curr = time.perf_counter()
+        logging.info("done! finding missing celebs in {} secs".format(time_curr - time_prev))
+
+        self.start_processing(celeb_records = missing_celeb_records)
+
+    def start_processing_with_celebNameList(self, in_celeb_name_list_fpath, out_celeb_record_fpath):
+        
+        """
+        entry point: start the processing from a file with only celeb names (quoted)
+
+        param:
+        out_celeb_record_fpath (str): the mapping from ms1m_id to name
+        """
+
+        celeb_records = []
+        offset = 100000         # offset for idx, to stagger away from other sources
+        with open(in_celeb_name_list_fpath, "r") as f:
+            for idx,line in enumerate(f.readlines()):
+                celeb_records.append(
+                    CombinedRecord(ms1m_id = "m.gw{:06d}".format(idx + offset),
+                                   imdb_id = "NA",
+                                   name = line.strip('"\n'),
+                                   rank = -1
+                    )
+                )
+
+        
+        logging.info("done reading in name list")
+
+        with open(out_celeb_record_fpath, "w") as f:
+            for celeb_record in celeb_records:
+                print('{}\t{}'.format(
+                    celeb_record.ms1m_id,
+                    '"{}"@zh'.format(celeb_record.name)
+                ), file = f)
+
+        logging.info("done writing name to ms1m mapping")
+        
+        self.start_processing(celeb_records)
+        
         
 
-
 if __name__ == "__main__":
-    celeb_image_service = CelebImageService()
+    # parser = argparse.ArgumentParser()
+    # subparsers = parser.add_subparsers(dest='mode', help="Mode")
+    
+    # subparsers.add_arguments("namelist", type=str, help="start pipeline from a file of namelist")
+    # subparsers.add_arguments("matcher", help="start pipeline from imdb to ms1m matcher")
 
-    celeb_image_service.start_processing()
+    # args = parser.parse_args()
+    
+    # celeb_image_service = CelebImageService()
+
+    # if args.mode == 'namelist':
+    #     celeb_image_service.start_processing_with_celebNameList(args.namelist)
+    # elif args.mode == 'matcher':
+    #     celeb_image_service.start_processing_with_imdbList_and_matchedPairsWithMs1m()
+    # else:
+    #     print("unknown mode")
+
+
+    celeb_image_service = CelebImageService()
+    celeb_image_service.start_processing_with_celebNameList("./in_china_celeb_list.txt", "./out_china_celeb_mapping.txt")
