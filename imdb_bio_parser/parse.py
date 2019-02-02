@@ -1,6 +1,7 @@
-url_prefix = "https://www.imdb.com/name"
 
-celebs = ['nm7939956']
+
+
+from datetime import datetime
 
 
 import requests
@@ -8,6 +9,37 @@ from bs4 import BeautifulSoup
 import bs4
 from pdb import set_trace as bp
 import traceback
+
+
+from sqlalchemy import and_
+from sqlalchemy import Column
+from sqlalchemy import create_engine
+from sqlalchemy import DateTime
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import VARCHAR
+from sqlalchemy import CHAR
+from sqlalchemy import BINARY
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session
+
+
+from model import ImdbCelebrity
+import model
+
+
+# Constants ---------------------------------------
+
+
+
+# Requests: ---------------------------------------
+
+url_prefix = "https://www.imdb.com/name"
+
+celebs = ['nm7939956']
 
 def get_first_elment(soup, css_selector):
     """element getter with safe wrappers
@@ -72,30 +104,44 @@ def get_elem_attr(element, attr_name):
             
 
 def get_bio(soup):
-    elem =  get_first_elment(soup, css_selector='div#name-bio-text > div > div', attribute='text')
+    elem =  get_first_elment(soup, css_selector='div#name-bio-text > div > div')
     return get_elem_text(elem)
     
 
 def get_avartar_image_url(soup):
     elem = get_first_elment(soup, css_selector='div#name-overview-widget #img_primary img')
-    bp()
+    # bp()
     return get_elem_attr(elem, 'src')
 
-def get_celeb(celeb_nmid):
+def get_celeb(nconst):
 
-    
-    url = url_prefix + '/' + celeb_nmid
+    url = url_prefix + '/' + nconst
     page = requests.get(url)
     soup = BeautifulSoup(page.text, 'html.parser')
     #bp()
 
     # print(get_bio(soup))
-    print(get_avartar_image_url(soup))
+    # print(get_avartar_image_url(soup))
+    celeb_record = ImdbCelebrity(nconst,
+                  bio=get_bio(soup),
+                  avartar_url=get_avartar_image_url(soup)
+                  )
     
     
-    #return page.text
+    return celeb_record
+
+
+
 
 
 if __name__ == "__main__":
-    print(get_celeb(celebs[0]))
-    print()
+    nconst = celebs[0]
+    db_engine = create_engine("sqlite:///imdb_celebrity.db")
+    model.Base.metadata.create_all(db_engine)
+
+
+    session = Session(db_engine)
+    session.merge(get_celeb(nconst))
+    session.commit()
+    session.close()
+
