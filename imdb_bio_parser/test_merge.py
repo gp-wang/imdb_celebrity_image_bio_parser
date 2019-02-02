@@ -54,7 +54,7 @@ total_cnt = 0
 # NAMED Tuple and local classes -------------------
 
 #  make a separate class for parsing data trasfer, because SQLAlchemy's object are not thread safe
-CelebrityDTO = namedtuple('CelebrityDTO', ['nconst', 'bio', 'avartar_url'])
+CelebrityDTO = namedtuple('CelebrityDTO', ['nconst', 'bio', 'avartar_url', 'parse_failure_cnt'])
 
 
 def get_first_elment(soup, css_selector):
@@ -145,14 +145,14 @@ def populate_celeb_info(nconst):
     soup = BeautifulSoup(page.text, 'html.parser')
 
     # gw: actually this cnt is any parse trial, ignore "failure"
-    # parse_failure_cnt = celeb_record.parse_failure_cnt + 1
+    parse_failure_cnt = celeb_record.parse_failure_cnt + 1
     #bp()
 
     # print(get_bio(soup))
     # print(get_avartar_image_url(soup))
     bio=get_bio(soup)
     avartar_url=get_avartar_image_url(soup)
-    # parse_failure_cnt = parse_failure_cnt
+    parse_failure_cnt = parse_failure_cnt
 
     
     # print("parsed %r" % celeb_record)
@@ -166,7 +166,7 @@ def populate_celeb_info(nconst):
     #     total_cnt_lock.release()
 
     # print("parsed %r" % cnt)
-    return CelebrityDTO(nconst, bio, avartar_url)
+    return CelebrityDTO(nconst, bio, avartar_url, parse_failure_cnt)
 
 # gw: db session is not thread safe
 # def populate_and_save_celeb_info(celeb_record, db_session):
@@ -180,7 +180,7 @@ DB_USER = 'imdb_celeb_parser'
 DB_PASSWORD = 'imdb_celeb_parser'
 DB_HOST = 'localhost'
 DB_PORT = '3306'
-DB_NAME = 'imdb_celeb_parser'
+DB_NAME = 'test_merge'
 
 if __name__ == "__main__":
     
@@ -192,82 +192,38 @@ if __name__ == "__main__":
         port=DB_PORT,
         dbname=DB_NAME
     ))
+
+    model.Base.metadata.drop_all(db_engine)
+    model.Base.metadata.create_all(db_engine)
     db_session = Session(db_engine)
     db_query = db_session.query(ImdbCelebrity)
 
-    # TODO: filter by not parsed yet
-    # all_top5k_celeb_records = db_query.all()
-    
-    all_top5k_celeb_records = db_query.filter(and_(ImdbCelebrity.avartar_url == None, ImdbCelebrity.bio == None, ImdbCelebrity.parse_failure_cnt < MAX_TRIAL_CNT)).all()
+    celeb = ImdbCelebrity('nm1234567', primaryName="Jack", avartar_url="his photo url")
+    #
+    db_session.add(celeb)
+    db_session.commit()
 
-    print("starting... %r records needs to parse" % len(all_top5k_celeb_records))
-    futures = []
+    #  gw: to merge additional field, don't create new item, instead use get by id (see below)
+    #new_celeb = ImdbCelebrity('nm1234567', primaryName="Jack", bio="A good Person")
 
-    cnt_commited = 0
-    with ThreadPoolExecutor(max_workers=8) as executor:
-
-        # for celeb_record in all_top5k_celeb_records:
-        #     executor.submit(populate_and_save_celeb_info, celeb_record, db_session)
-
-        for celeb_nconst in [celeb.nconst for celeb in all_top5k_celeb_records]:
-            #future = executor.submit(populate_and_save_celeb_info, celeb_record, db_session)
-            future = executor.submit(populate_celeb_info, celeb_nconst)
-            futures.append(future)
-            # populate_and_save_celeb_info(celeb_record, db_session)
+    existing_celeb = db_query.get('nm1234567')
+    if existing_celeb:
+        existing_celeb.bio = 'A good Person'
+        db_session.merge(existing_celeb)
+        print('updated existing')
+    else:
+        new_celeb = ImdbCelebrity('nm1234567', primaryName="Jack", bio="A good Person")
+        db_session.merge(new_celeb)
+        print('created new')
 
 
-        i = 0
-        for completed_future in concurrent.futures.as_completed(futures):
-            tb = ""
-            try:
-                #print("try 1")
-                celebDTO = completed_future.result()
-                existing_celeb_record = db_query.get(celebDTO.nconst)
-                if existing_celeb_record:
-                    existing_celeb_record.bio = celebDTO.bio
-                    existing_celeb_record.avartar_url = celebDTO.avartar_url
-                    existing_celeb_record.parse_failure_cnt += 1
 
-                    db_session.merge(existing_celeb_record)
-                else:
-                    new_celeb_record = ImdbCelebrity(celebDTO.nconst,
-                                                     primaryName='unknown',
-                                                     bio=celebDTO.bio,
-                                                     avartar_url=celebDTO.avartar_url,
-                                                     parse_failure_cnt=0
-                                                     )
-                    db_session.merge(new_celeb_record)
+    db_session.commit()
 
-                i += 1
-            except Exception as e:
-                tb = traceback.format_exc()
-                
-            else:
-                tb = ""
-            finally:
-                if tb:
-                    print(tb)
 
-            if i == DB_BATCH_SIZE:
-                db_session.commit()
-                cnt_commited += i
-                
-                i = 0
-                print("commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
 
-        # last batch
-        db_session.commit()
-        cnt_commited += i
-        i = 0
-        print("commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
-        
-    # concurrent.futures.wait(futures)
-    # updated_celeb_records = [future.result() for future in futures]
+    print(db_query.filter(ImdbCelebrity.nconst=='nm1234567').all())
 
-    # for celeb_record in updated_celeb_records:
-    #     db_session.merge(celeb_record)
-    # db_session.commit()
-    
     db_session.close()
-    print("done %r" % len(cnt_commited))
+
 

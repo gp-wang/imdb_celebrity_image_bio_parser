@@ -48,7 +48,9 @@ class ImdbCelebrity(Base):
                  primaryProfession=None,
                  knownForTitles=None,
 
-                 bio=None, avartar=None, avartar_url=None):
+                 bio=None, avartar=None, avartar_url=None,
+                 parse_failure_cnt=0
+                 ):
 
         self.nconst = nconst
         self.primaryName=primaryName
@@ -60,6 +62,7 @@ class ImdbCelebrity(Base):
         self.bio = bio
         self.avartar = avartar
         self.avartar_url = avartar_url
+        self.parse_failure_cnt=parse_failure_cnt
 
     def __repr__(self) -> str:
         return "ImdbCelebrity(%r, %r,%r,%r,%r,%r,%r,%r,)" %(
