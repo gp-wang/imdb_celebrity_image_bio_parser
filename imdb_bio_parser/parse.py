@@ -204,7 +204,7 @@ if __name__ == "__main__":
     futures = []
 
     cnt_commited = 0
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
 
         # for celeb_record in all_top5k_celeb_records:
         #     executor.submit(populate_and_save_celeb_info, celeb_record, db_session)

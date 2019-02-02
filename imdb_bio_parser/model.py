@@ -33,7 +33,7 @@ class ImdbCelebrity(Base):
     knownForTitles = Column(VARCHAR(1024))
 
     #  parsed resources
-    bio = Column(VARCHAR(255))
+    bio = Column(VARCHAR(2048))
     avartar = Column(BINARY)
     avartar_url = Column(VARCHAR(200))
 
