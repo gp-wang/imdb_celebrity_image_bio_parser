@@ -12,7 +12,7 @@ from pdb import set_trace as bp
 import traceback
 
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from sqlalchemy import Column
 from sqlalchemy import create_engine
 from sqlalchemy import DateTime
@@ -54,9 +54,7 @@ total_cnt = 0
 # NAMED Tuple and local classes -------------------
 
 #  make a separate class for parsing data trasfer, because SQLAlchemy's object are not thread safe
-CelebrityDTO = namedtuple('CelebrityDTO', ['nconst', 'bio', 'avartar_url', 'avartar_blob'])
-
-
+CelebrityDTO = namedtuple('CelebrityDTO', ['nconst', 'bio', 'avartar_url'])
 
 
 def get_first_elment(soup, css_selector):
@@ -131,30 +129,6 @@ def get_avartar_image_url(soup):
     # bp()
     return get_elem_attr(elem, 'src')
 
-
-def get_image_data(celeb_dto):
-    
-    url = celeb_dto.avartar_url
-    data=b''
-    try:
-        response = requests.get(url)
-        data = response.content
-    except AttributeError as ae:
-        tb = traceback.format_exc()
-        print("error getting image for url %r, attr error: %r" % (url, ae))
-    except Exception as e:
-        tb = traceback.format_exc()
-        print("error getting image for url %r, exception: %r" % (url, e))
-    else:
-        tb = ""
-    finally:
-        if tb:
-            print(tb)
-
-    #celeb_dto.avartar_blob = data
-    return CelebrityDTO(nconst=celeb_dto.nconst, bio=None, avartar_url=None, avartar_blob=data)
-    
-
 def populate_celeb_info(nconst):
     """
     populate bio, and avartar_url of the celeb
@@ -167,6 +141,7 @@ def populate_celeb_info(nconst):
 
     url = url_prefix + '/' + nconst
     page = requests.get(url)
+
     # page = proxied_get_https_url(url, TIME_OUT)
     soup = BeautifulSoup(page.text, 'html.parser')
 
@@ -221,15 +196,13 @@ if __name__ == "__main__":
     db_session = Session(db_engine)
     db_query = db_session.query(ImdbCelebrity)
 
-
-    # parse image url -----------------------------------------------------------------------
     # TODO: filter by not parsed yet
     # all_top5k_celeb_records = db_query.all()
     
     all_top5k_celeb_records = db_query.filter(and_(ImdbCelebrity.avartar_url == None, ImdbCelebrity.bio == None, ImdbCelebrity.parse_failure_cnt < MAX_TRIAL_CNT)).all()
 
     print("starting... %r records needs to parse" % len(all_top5k_celeb_records))
-    
+    futures = []
 
     cnt_commited = 0
     with ThreadPoolExecutor(max_workers=16) as executor:
@@ -237,7 +210,6 @@ if __name__ == "__main__":
         # for celeb_record in all_top5k_celeb_records:
         #     executor.submit(populate_and_save_celeb_info, celeb_record, db_session)
 
-        futures = []
         for celeb_nconst in [celeb.nconst for celeb in all_top5k_celeb_records]:
             #future = executor.submit(populate_and_save_celeb_info, celeb_record, db_session)
             future = executor.submit(populate_celeb_info, celeb_nconst)
@@ -282,13 +254,13 @@ if __name__ == "__main__":
                 cnt_commited += i
                 
                 i = 0
-                print("image url: commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
+                print("commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
 
         # last batch
         db_session.commit()
         cnt_commited += i
         i = 0
-        print("image url: commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
+        print("commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
         
     # concurrent.futures.wait(futures)
     # updated_celeb_records = [future.result() for future in futures]
@@ -296,74 +268,6 @@ if __name__ == "__main__":
     # for celeb_record in updated_celeb_records:
     #     db_session.merge(celeb_record)
     # db_session.commit()
-
-
-    # parse image data -----------------------------------------------------------------------
-    celebs_to_parse_avartar = db_query.filter(and_(
-        or_(ImdbCelebrity.avartar_blob == None, ImdbCelebrity.avartar_blob == b''),
-        and_(ImdbCelebrity.avartar_url != None, ImdbCelebrity.avartar_url != "" ),
-        ImdbCelebrity.parse_failure_cnt < MAX_TRIAL_CNT
-    )).all()
-
-    with ThreadPoolExecutor(max_workers=16) as executor:
-
-        # for celeb_record in all_top5k_celeb_records:
-        #     executor.submit(populate_and_save_celeb_info, celeb_record, db_session)
-
-        futures = []
-        for celeb_dto in [CelebrityDTO(nconst=celeb.nconst, bio=None,
-                                       avartar_url=celeb.avartar_url, avartar_blob=None) 
-                          for celeb in celebs_to_parse_avartar]:
-            future = executor.submit(get_image_data, celeb_dto)
-            futures.append(future)
-
-        i = 0
-        for completed_future in concurrent.futures.as_completed(futures):
-            tb = ""
-            try:
-                #print("try 1")
-                celeb_dto = completed_future.result()
-                image_data = celeb_dto.avartar_blob
-                existing_celeb_record = db_query.get(celeb_dto.nconst)
-                if existing_celeb_record:
-                    existing_celeb_record.avartar_blob = celeb_dto.avartar_blob
-                    existing_celeb_record.parse_failure_cnt += 1
-
-                    db_session.merge(existing_celeb_record)
-                else:
-                    new_celeb_record = ImdbCelebrity(celebDTO.nconst,
-                                                     primaryName='unknown',
-                                                     avartar_blob=celebDTO.avartar_blob,
-                                                     parse_failure_cnt=0
-                                                     )
-                    db_session.merge(new_celeb_record)
-
-                i += 1
-            except Exception as e:
-                tb = traceback.format_exc()
-                
-            else:
-                tb = ""
-            finally:
-                if tb:
-                    print(tb)
-
-            if i == DB_BATCH_SIZE:
-                db_session.commit()
-                cnt_commited += i
-                
-                i = 0
-                print("image data: commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
-
-        # last batch
-        db_session.commit()
-        cnt_commited += i
-        i = 0
-        print("image data: commited %r out of %r " % (cnt_commited, len(all_top5k_celeb_records)))
-
-    
-
-    
     
     db_session.close()
     print("done %r" % len(cnt_commited))

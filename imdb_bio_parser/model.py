@@ -1,5 +1,5 @@
 from datetime import datetime, MINYEAR
-from sqlalchemy import and_
+from sqlalchemy import and_, LargeBinary
 from sqlalchemy import Column
 from sqlalchemy import create_engine
 from sqlalchemy import DateTime
@@ -36,6 +36,7 @@ class ImdbCelebrity(Base):
     bio = Column(VARCHAR(2048))
     avartar = Column(BINARY)
     avartar_url = Column(VARCHAR(200))
+    avartar_blob = Column(LargeBinary)
 
     # flag to mark number of trials to parse this row
     # combined with an empty field (e.g. primaryName), you can tell whether this row worth further trial
@@ -49,6 +50,7 @@ class ImdbCelebrity(Base):
                  knownForTitles=None,
 
                  bio=None, avartar=None, avartar_url=None,
+                 avartar_blob=None,
                  parse_failure_cnt=0
                  ):
 
@@ -62,6 +64,7 @@ class ImdbCelebrity(Base):
         self.bio = bio
         self.avartar = avartar
         self.avartar_url = avartar_url
+        self.avartar_blob = avartar_blob
         self.parse_failure_cnt=parse_failure_cnt
 
     def __repr__(self) -> str:
@@ -75,3 +78,24 @@ class ImdbCelebrity(Base):
             self.bio,
             self.avartar_url
         )
+
+
+
+
+class ImdbMsid(Base):
+    __tablename__ = "imdb_msid"
+
+    nconst = Column(CHAR(9), primary_key=True)
+    msid = Column(VARCHAR(20), nullable=False)
+
+    def __init__(self, nconst, msid):
+
+        self.nconst = nconst
+        self.msid = msid
+
+    def __repr__(self) -> str:
+        return "ImdbMsid(%r, %r)" %(
+            self.nconst,
+            self.msid
+        )
+    
