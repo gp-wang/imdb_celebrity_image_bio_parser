@@ -17,3 +17,4 @@ link
     matched imdb_id (nm...) to ms1m_id(m.xxxxxx)
     
     
+![imdb_celebrity_parser drawio](https://user-images.githubusercontent.com/10679417/142739613-50de7623-9947-490e-8ebd-9449a0fe600e.png)
